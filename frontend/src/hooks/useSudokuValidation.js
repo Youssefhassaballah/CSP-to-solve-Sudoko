@@ -33,7 +33,9 @@ const useSudokuValidation = () => {
       return {
         isConsistent: result.has_solution,
         isCellInvalid: isCellInvalid,
-        message: result.message
+        message: result.message,
+        arcConsistencySteps: result.arc_consistency_steps || [],
+        domains: result.domains || {}
       };
     } catch (err) {
       console.error('Consistency check error:', err);

@@ -85,11 +85,15 @@ class SudokuCSP:
         
         # Record step for visualization
         if revised and values_to_remove:
+            # Create a snapshot of all domains after this revision
+            domain_snapshot = {str(k): list(v) for k, v in self.domains.items()}
+
             self.arc_consistency_steps.append({
                 'arc': (xi, xj),
                 'cell': xi,
                 'removed_values': list(values_to_remove),
-                'remaining_domain': list(self.domains[xi])
+                'remaining_domain': list(self.domains[xi]),
+                'domains_snapshot': domain_snapshot
             })
         
         return revised

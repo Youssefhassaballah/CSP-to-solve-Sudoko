@@ -7,11 +7,13 @@ const useSudokuSolver = () => {
   const [solved, setSolved] = useState(false);
   const [solveTime, setSolveTime] = useState(0);
   const [arcConsistencySteps, setArcConsistencySteps] = useState([]);
+  const [domains, setDomains] = useState({});
 
-  const solvePuzzle = useCallback(async (board, setBoard) => {
+  const solvePuzzle = useCallback(async (board, setBoard, setGameDomains = null) => {
     setSolving(true);
     setSolved(false);
     setArcConsistencySteps([]);
+    setDomains({});
     
     try {
       const result = await apiService.solvePuzzle(board);
@@ -20,12 +22,18 @@ const useSudokuSolver = () => {
       setSolveTime(result.total_time * 1000); // Convert to ms
       setSolved(true);
       
-      // Format arc consistency steps for display
-      if (result.arc_consistency_steps) {
-        const steps = result.arc_consistency_steps.map(step => 
-          `Arc (${step.arc[0]}) → (${step.arc[1]}): Removed ${step.removed_values.join(', ')} from cell (${step.cell[0]+1}, ${step.cell[1]+1})`
-        );
-        setArcConsistencySteps(steps);
+      // Store arc consistency steps with full data (domains snapshots included)
+      if (result.arc_consistency_steps && result.arc_consistency_steps.length > 0) {
+        setArcConsistencySteps(result.arc_consistency_steps);
+      }
+      
+      // Store and share domains
+      if (result.domains) {
+        setDomains(result.domains);
+        // If callback is provided, also update game domains
+        if (setGameDomains) {
+          setGameDomains(result.domains);
+        }
       }
     } catch (err) {
       console.error('Solving error:', err);
@@ -47,6 +55,7 @@ const useSudokuSolver = () => {
     solved,
     solveTime,
     arcConsistencySteps,
+    domains,
     timeBreakdown: undefined, // Not currently used, but expected by GamePage
     solvePuzzle,
     resetSolver

@@ -1,5 +1,5 @@
 // src/pages/GamePage.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { SudokuBoard } from '../components/Board';
 import { ActionButtons, NumberInput, CustomBoardActions } from '../components/Controls';
 import {
@@ -7,7 +7,9 @@ import {
   Statistics,
   ArcConsistencySteps,
   Legend,
-  ValidationStatus
+  ValidationStatus,
+  DomainViewer,
+  ArcConsistencyVisualization
 } from '../components/Info';
 import useSudokuGame from '../hooks/useSudokuGame';
 import useSudokuSolver from '../hooks/useSudokuSolver';
@@ -15,6 +17,7 @@ import { isValidMove } from '../utils/validation';
 import { validateCustomBoard } from '../services/api';
 
 const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) => {
+  const hasInitialized = useRef(false);
   const {
     board,
     setBoard,
@@ -27,9 +30,15 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
     difficulty,
     setDifficulty,
     validating,
+    moveArcConsistencySteps,
+    loading,
+    domains,
     handleCellClick,
     handleNumberInput,
     handleKeyPress,
+    provideHint,
+    undoMove,
+    moves,
     resetBoard,
     clearBoard,
     loadPuzzle
@@ -40,6 +49,7 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
     solved,
     solveTime,
     arcConsistencySteps,
+    domains: solverDomains,
     timeBreakdown,
     solvePuzzle,
     resetSolver
@@ -52,6 +62,9 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
   const [isEditMode, setIsEditMode] = useState(false);
 
   useEffect(() => {
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
+
     setMode(initialMode);
     setDifficulty(initialDifficulty);
     setIsCustomMode(initialMode === 'custom');
@@ -61,7 +74,7 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
     } else {
       loadPuzzle(initialDifficulty);
     }
-  }, []);
+  }, [initialMode, initialDifficulty, setMode, setDifficulty, clearBoard, loadPuzzle]);
 
   const handleValidateBoard = async () => {
     setValidationStatus(null);
@@ -94,7 +107,7 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
 
     // Disable edit mode when solving
     setIsEditMode(false);
-    solvePuzzle(board, setBoard);
+    solvePuzzle(board, setBoard, setDomains);
   };
 
   const handleReset = () => {
@@ -231,6 +244,13 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
           </div>
         </div>
 
+        {/* Error Message at Top */}
+        {error && (
+          <div className="mb-6">
+            <ErrorMessage message={error} />
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Sidebar - Controls */}
           <div className="lg:col-span-3 space-y-4">
@@ -251,8 +271,11 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
                   onSolve={handleSolve}
                   onReset={handleReset}
                   onClear={handleClear}
+                  onHint={provideHint}
+                  onUndo={undoMove}
                   solving={solving}
                   solved={solved}
+                  canUndo={moves && moves.length > 0}
                 />
 
                 {/* Edit Board Button */}
@@ -320,16 +343,24 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
 
           {/* Center - Game Board */}
           <div className="lg:col-span-6">
-            <SudokuBoard
-              board={board}
-              initialBoard={canEditCells ? board : initialBoard}
-              selectedCell={selectedCell}
-              solved={solved && !isEditMode}
-              onCellClick={handleCellClick}
-              onKeyPress={handleKeyPress}
-              isValidMove={isValidMove}
-            />
-            <ErrorMessage message={error} />
+            {loading ? (
+              <div className="bg-white rounded-2xl shadow-2xl p-8 flex items-center justify-center" style={{ aspectRatio: '1/1' }}>
+                <div className="text-center">
+                  <div className="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mb-4"></div>
+                  <p className="text-gray-600 font-semibold">Loading puzzle...</p>
+                </div>
+              </div>
+            ) : (
+              <SudokuBoard
+                board={board}
+                initialBoard={canEditCells ? board : initialBoard}
+                selectedCell={selectedCell}
+                solved={solved && !isEditMode}
+                onCellClick={handleCellClick}
+                onKeyPress={handleKeyPress}
+                isValidMove={isValidMove}
+              />
+            )}
 
             {isEditMode && (
               <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-xl">
@@ -358,7 +389,19 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
 
           {/* Right Sidebar - Info */}
           <div className="lg:col-span-3 space-y-4">
-            <ArcConsistencySteps steps={arcConsistencySteps} />
+            <DomainViewer
+              selectedCell={selectedCell}
+              domains={solved ? solverDomains : domains}
+              board={board}
+            />
+
+            {solved && arcConsistencySteps.length > 0 ? (
+              <ArcConsistencySteps steps={arcConsistencySteps} />
+            ) : !solved && moveArcConsistencySteps.length > 0 ? (
+              <ArcConsistencySteps steps={moveArcConsistencySteps} />
+            ) : (
+              <ArcConsistencySteps steps={[]} />
+            )}
 
             <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl shadow-lg p-5 text-white">
               <h3 className="text-base font-semibold mb-2 flex items-center gap-2">

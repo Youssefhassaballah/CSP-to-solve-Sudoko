@@ -44,9 +44,21 @@ def solve_sudoku():
     else:
         backtrack_time = 0
     
+    # Convert arc consistency steps to JSON-serializable format
+    serializable_steps = []
+    for step in solver.arc_consistency_steps:
+        serializable_steps.append({
+            'arc': [list(step['arc'][0]), list(step['arc'][1])],
+            'cell': list(step['cell']),
+            'removed_values': step['removed_values'],
+            'remaining_domain': step['remaining_domain'],
+            'domains_snapshot': step['domains_snapshot']
+        })
+    
     return jsonify({
         'solved_board': solver.board,
-        'arc_consistency_steps': solver.arc_consistency_steps,
+        'arc_consistency_steps': serializable_steps,
+        'domains': {str(k): list(v) for k, v in solver.domains.items()},
         'time_arc': arc_time,
         'time_backtrack': backtrack_time,
         'total_time': arc_time + backtrack_time,
@@ -155,37 +167,49 @@ def check_consistency():
     
     # Apply arc consistency first
     arc_consistent = solver.arc_consistency()
-    
+
+    # Get arc consistency steps and domains
+    arc_steps = solver.arc_consistency_steps
+    domains = {str(k): list(v) for k, v in solver.domains.items()}
+
     if not arc_consistent:
         return jsonify({
             'has_solution': False,
             'message': 'Board is inconsistent (no solution possible)',
-            'invalid_cells': []
+            'invalid_cells': [],
+            'arc_consistency_steps': arc_steps,
+            'domains': domains
         })
-    
+
     # If board is already solved, it's consistent
     if all(0 not in row for row in solver.board):
         return jsonify({
             'has_solution': True,
             'message': 'Board is solved and consistent',
-            'invalid_cells': []
+            'invalid_cells': [],
+            'arc_consistency_steps': arc_steps,
+            'domains': domains
         })
-    
+
     # Try to solve with backtracking (with timeout)
     start_time = time.time()
     solved = solver.solve_with_backtracking()
-    
+
     if solved:
         return jsonify({
             'has_solution': True,
             'message': 'Board has at least one solution',
-            'invalid_cells': []
+            'invalid_cells': [],
+            'arc_consistency_steps': arc_steps,
+            'domains': domains
         })
     else:
         return jsonify({
             'has_solution': False,
             'message': 'Board has no solution',
-            'invalid_cells': find_contradiction_cells(board_copy, solver)
+            'invalid_cells': find_contradiction_cells(board_copy, solver),
+            'arc_consistency_steps': arc_steps,
+            'domains': domains
         })
 
 

@@ -15,6 +15,9 @@ const useSudokuGame = () => {
   const [hintMode, setHintMode] = useState(false);
   const [score, setScore] = useState(1000);
   const [moves, setMoves] = useState([]);
+  const [moveArcConsistencySteps, setMoveArcConsistencySteps] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [domains, setDomains] = useState({});
 
   const {
     validationState,
@@ -73,11 +76,26 @@ const useSudokuGame = () => {
 
     setValidating(true);
 
-    // Advanced consistency check
+    // Advanced consistency check (with arc consistency analysis)
     const consistency = await checkMoveConsistency(newBoard, row, col, number);
 
+    // Update arc consistency steps for this move
+    if (consistency.arcConsistencySteps && consistency.arcConsistencySteps.length > 0) {
+      const formattedSteps = consistency.arcConsistencySteps.map(step =>
+        `Arc (${step.arc[0]}) → (${step.arc[1]}): Removed ${step.removed_values.join(', ')} from cell (${step.cell[0]+1}, ${step.cell[1]+1})`
+      );
+      setMoveArcConsistencySteps(formattedSteps);
+    } else {
+      setMoveArcConsistencySteps([]);
+    }
+
+    // Update domains from consistency check
+    if (consistency.domains) {
+      setDomains(consistency.domains);
+    }
+
     if (!consistency.isConsistent) {
-      setError(`❌ ${consistency.message}`);
+      setError(`🚫 Board Cannot Be Solved! ${consistency.message || 'This move creates a contradiction that makes the puzzle unsolvable. Please undo or reset.'}`);
       setScore(prev => Math.max(0, prev - 100));
       setValidating(false);
 
@@ -122,18 +140,33 @@ const useSudokuGame = () => {
       setError('Select an empty cell to get a hint');
       return;
     }
-    
+
     setValidating(true);
     setHintMode(true);
-    
+
     try {
       const result = await apiService.solvePuzzle(board);
       const solution = result.solved_board;
       const { row, col } = selectedCell;
       const correctValue = solution[row][col];
-      
-      setError(`💡 Hint: Try ${correctValue} in this cell`);
+
+      // Fill in the correct value
+      const newBoard = board.map(r => [...r]);
+      newBoard[row][col] = correctValue;
+      setBoard(newBoard);
+
+      setError(`💡 Hint used! Filled ${correctValue} in cell (${row + 1}, ${col + 1})`);
       setScore(prev => Math.max(0, prev - 30)); // Cost for hint
+
+      // Add to move history
+      setMoves(prev => [...prev, {
+        row,
+        col,
+        value: correctValue,
+        timestamp: new Date().toISOString(),
+        scoreChange: -30,
+        isHint: true
+      }]);
     } catch (err) {
       setError('Could not generate hint');
     } finally {
@@ -167,6 +200,7 @@ const useSudokuGame = () => {
     resetValidation();
     setScore(1000);
     setMoves([]);
+    setMoveArcConsistencySteps([]);
   }, [initialBoard, resetValidation]);
 
   const clearBoard = useCallback(() => {
@@ -178,9 +212,11 @@ const useSudokuGame = () => {
     resetValidation();
     setScore(1000);
     setMoves([]);
+    setMoveArcConsistencySteps([]);
   }, [resetValidation]);
 
   const loadPuzzle = useCallback(async (difficultyLevel) => {
+    setLoading(true);
     try {
       const result = await apiService.generatePuzzle(difficultyLevel);
       setBoard(result.puzzle);
@@ -190,9 +226,20 @@ const useSudokuGame = () => {
       resetValidation();
       setScore(1000);
       setMoves([]);
+      setMoveArcConsistencySteps([]);
+
+      // Fetch initial domains for the board
+      try {
+        const consistencyResult = await checkMoveConsistency(result.puzzle, 0, 0, 0);
+        if (consistencyResult.domains) {
+          setDomains(consistencyResult.domains);
+        }
+      } catch (domainError) {
+        console.log('Could not fetch initial domains:', domainError);
+      }
     } catch (err) {
       setError(`Failed to load puzzle: ${err.message}`);
-      
+
       // Fallback to a default puzzle
       const defaultPuzzle = [
         [5, 3, 0, 0, 7, 0, 0, 0, 0],
@@ -210,8 +257,11 @@ const useSudokuGame = () => {
       resetValidation();
       setScore(1000);
       setMoves([]);
+      setMoveArcConsistencySteps([]);
+    } finally {
+      setLoading(false);
     }
-  }, [resetValidation]);
+  }, [resetValidation, checkMoveConsistency]);
 
   return {
     board,
@@ -229,6 +279,9 @@ const useSudokuGame = () => {
     score,
     moves,
     hintMode,
+    moveArcConsistencySteps,
+    loading,
+    domains,
     handleCellClick,
     handleNumberInput,
     handleKeyPress,

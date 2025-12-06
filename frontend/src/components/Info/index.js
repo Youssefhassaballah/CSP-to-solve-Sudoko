@@ -4,3 +4,5 @@ export { default as ArcConsistencySteps } from './ArcConsistencySteps';
 export { default as Legend } from './Legend';
 export { default as ScoreBoard } from './ScoreBoard';
 export { default as ValidationStatus } from './ValidationStatus';
+export { default as DomainViewer } from './DomainViewer';
+export { default as ArcConsistencyVisualization } from './ArcConsistencyVisualization';
