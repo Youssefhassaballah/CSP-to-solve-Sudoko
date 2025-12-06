@@ -47,6 +47,7 @@ const useSudokuSolver = () => {
     solved,
     solveTime,
     arcConsistencySteps,
+    timeBreakdown: undefined, // Not currently used, but expected by GamePage
     solvePuzzle,
     resetSolver
   };

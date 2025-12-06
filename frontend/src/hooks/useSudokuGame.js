@@ -28,61 +28,93 @@ const useSudokuGame = () => {
     setError('');
   }, []);
 
-  const handleNumberInput = useCallback(async (number) => {
+  const handleNumberInput = useCallback(async (number, skipValidation = false) => {
     if (!selectedCell) return;
-    
+
     const { row, col } = selectedCell;
-    
-    // Don't allow modification of initial values
+
+    // In custom mode, allow all edits without validation
+    if (mode === 'custom' || skipValidation) {
+      const newBoard = board.map(r => [...r]);
+      newBoard[row][col] = number;
+      setBoard(newBoard);
+      setError('');
+      return;
+    }
+
+    // Don't allow modification of initial values in other modes
     if (initialBoard[row][col] !== 0) {
       setError('Cannot modify initial puzzle values');
       return;
     }
-    
+
     const newBoard = board.map(r => [...r]);
     newBoard[row][col] = number;
-    
-    // Basic validation
+
+    // Always update the board, even if invalid
+    setBoard(newBoard);
+
+    // Basic validation - show error but don't prevent the move
     if (number !== 0 && !isValidMove(newBoard, row, col, number)) {
       setError('❌ Invalid move! Number already exists in row, column, or subgrid');
       setScore(prev => Math.max(0, prev - 50));
+
+      // Add to move history with negative score
+      setMoves(prev => [...prev, {
+        row,
+        col,
+        value: number,
+        timestamp: new Date().toISOString(),
+        scoreChange: -50,
+        isInvalid: true
+      }]);
       return;
     }
-    
+
     setValidating(true);
-    
+
     // Advanced consistency check
     const consistency = await checkMoveConsistency(newBoard, row, col, number);
-    
+
     if (!consistency.isConsistent) {
       setError(`❌ ${consistency.message}`);
       setScore(prev => Math.max(0, prev - 100));
       setValidating(false);
+
+      // Add to move history with negative score
+      setMoves(prev => [...prev, {
+        row,
+        col,
+        value: number,
+        timestamp: new Date().toISOString(),
+        scoreChange: -100,
+        isInvalid: true
+      }]);
       return;
     }
-    
+
     // Move is valid and consistent
-    setBoard(newBoard);
     setError('');
     setScore(prev => prev + 10);
-    
+
     // Add to move history
     setMoves(prev => [...prev, {
       row,
       col,
       value: number,
       timestamp: new Date().toISOString(),
-      scoreChange: number === 0 ? -5 : 10
+      scoreChange: number === 0 ? -5 : 10,
+      isInvalid: false
     }]);
-    
+
     // Check if puzzle is complete
     if (isBoardComplete(newBoard)) {
       setError('🎉 Congratulations! Puzzle solved correctly!');
       setScore(prev => prev + 500); // Bonus for completion
     }
-    
+
     setValidating(false);
-  }, [selectedCell, board, initialBoard, checkMoveConsistency]);
+  }, [selectedCell, board, initialBoard, checkMoveConsistency, mode]);
 
   // New function to provide hints
   const provideHint = useCallback(async () => {
@@ -185,6 +217,7 @@ const useSudokuGame = () => {
     board,
     setBoard,
     initialBoard,
+    setInitialBoard,
     selectedCell,
     error,
     mode,

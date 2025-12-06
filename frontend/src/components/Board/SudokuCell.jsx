@@ -15,23 +15,35 @@ const SudokuCell = ({
 }) => {
   const getCellClassName = () => {
     let className = "w-full h-full flex items-center justify-center text-xl font-semibold transition-all cursor-pointer ";
-    
+
+    // Priority order for styling
     if (isInitial) {
-      className += "bg-blue-50 text-blue-900 font-bold ";
+      // Initial cells (from API/puzzle) - Indigo/Blue background
+      className += "bg-indigo-100 text-indigo-900 font-bold ";
     } else if (isSelected) {
+      // Selected cell - Yellow highlight
       className += "bg-yellow-200 ";
-    } else if (isSolved) {
-      className += "bg-green-50 text-green-700 ";
+      // If invalid and selected, show red text
+      if (isInvalid) {
+        className += "text-red-600 font-bold ";
+      }
+    } else if (isSolved && value !== 0) {
+      // Solved cells (filled by AI solver) - Emerald/Green background
+      className += "bg-emerald-100 text-emerald-800 ";
     } else if (isInvalid) {
-      className += "bg-red-100 text-red-700 animate-pulse ";
+      // Invalid moves - Red text only, keep white background
+      className += "bg-white !text-red-600 !font-extrabold ";
     } else if (isContradiction) {
+      // Contradicting cells - Darker red
       className += "bg-red-200 text-red-900 border-2 border-red-500 ";
     } else if (isHint) {
+      // Hint cells - Purple
       className += "bg-purple-100 text-purple-700 border-2 border-purple-400 ";
     } else {
+      // Empty or user-filled cells - White
       className += "bg-white hover:bg-gray-50 ";
     }
-    
+
     return className;
   };
 
@@ -39,18 +51,15 @@ const SudokuCell = ({
     <div
       onClick={onClick}
       className={`
-        aspect-square border border-gray-300 relative
+        aspect-square relative
+        ${isInvalid ? 'border-2 border-red-400' : 'border border-gray-300'}
         ${colIndex % 3 === 2 && colIndex !== 8 ? 'border-r-2 border-r-gray-800' : ''}
         ${rowIndex % 3 === 2 && rowIndex !== 8 ? 'border-b-2 border-b-gray-800' : ''}
-        ${isInvalid ? 'animate-pulse' : ''}
       `}
     >
       <div className={getCellClassName()}>
         {value !== 0 ? value : ''}
       </div>
-      {isInvalid && (
-        <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full"></div>
-      )}
       {isContradiction && (
         <div className="absolute top-0 right-0 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center">
           <span className="text-white text-xs">!</span>
