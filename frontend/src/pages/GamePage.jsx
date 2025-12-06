@@ -1,5 +1,5 @@
 // src/pages/GamePage.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState ,useRef} from 'react';
 import { SudokuBoard } from '../components/Board';
 import { ActionButtons, NumberInput, CustomBoardActions } from '../components/Controls';
 import {
@@ -15,6 +15,7 @@ import { isValidMove } from '../utils/validation';
 import { validateCustomBoard } from '../services/api';
 
 const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) => {
+  const hasInitialized = useRef(false);
   const {
     board,
     setBoard,
@@ -42,7 +43,9 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
     arcConsistencySteps,
     timeBreakdown,
     solvePuzzle,
-    resetSolver
+    applyArcConsistency,
+    resetSolver,
+    clearArcSteps
   } = useSudokuSolver();
 
   const [isCustomMode, setIsCustomMode] = useState(false);
@@ -50,8 +53,12 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
   const [validationStatus, setValidationStatus] = useState(null);
   const [validationMessage, setValidationMessage] = useState('');
   const [isEditMode, setIsEditMode] = useState(false);
+  
 
   useEffect(() => {
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
+
     setMode(initialMode);
     setDifficulty(initialDifficulty);
     setIsCustomMode(initialMode === 'custom');
@@ -61,7 +68,7 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
     } else {
       loadPuzzle(initialDifficulty);
     }
-  }, []);
+  }, [initialMode, initialDifficulty, setMode, setDifficulty, clearBoard, loadPuzzle]);
 
   const handleValidateBoard = async () => {
     setValidationStatus(null);
@@ -186,6 +193,24 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
     link.click();
   };
 
+  // Handle number input with arc consistency for play mode
+  const handleNumberInputWithArcConsistency = async (number) => {
+    // First handle the regular input
+    handleNumberInput(number);
+    
+    // Then apply arc consistency if in play mode (not custom or edit mode)
+    if (mode === 'play' && !isEditMode && !isCustomMode) {
+      try {
+        const result = await applyArcConsistency(board);
+        if (!result) {
+          console.warn('Arc consistency returned null result');
+        }
+      } catch (err) {
+        console.error('Error applying arc consistency:', err);
+      }
+    }
+  };
+
   // Determine if cells can be edited
   const canEditCells = isCustomMode || isEditMode;
 
@@ -304,7 +329,7 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
             {((mode === 'play' && !solved) || isCustomMode || isEditMode) && (
               <NumberInput
                 selectedCell={selectedCell}
-                onNumberInput={handleNumberInput}
+                onNumberInput={mode === 'play' ? handleNumberInputWithArcConsistency : handleNumberInput}
               />
             )}
 
@@ -320,6 +345,9 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
 
           {/* Center - Game Board */}
           <div className="lg:col-span-6">
+            <div className="mb-4">
+              <ErrorMessage message={error} />
+            </div>
             <SudokuBoard
               board={board}
               initialBoard={canEditCells ? board : initialBoard}
@@ -329,7 +357,7 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
               onKeyPress={handleKeyPress}
               isValidMove={isValidMove}
             />
-            <ErrorMessage message={error} />
+            
 
             {isEditMode && (
               <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-xl">

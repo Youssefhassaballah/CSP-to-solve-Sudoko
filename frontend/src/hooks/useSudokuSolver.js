@@ -35,10 +35,34 @@ const useSudokuSolver = () => {
     }
   }, []);
 
+  const applyArcConsistency = useCallback(async (board) => {
+    try {
+      const result = await apiService.applyArcConsistency(board);
+      
+      // Format arc consistency steps for display and accumulate them
+      if (result.arc_steps && result.arc_steps.length > 0) {
+        const newSteps = result.arc_steps.map(step => 
+          `Arc (${step.arc[0]}) → (${step.arc[1]}): Removed ${step.removed_values.join(', ')} from cell (${step.cell[0]+1}, ${step.cell[1]+1})`
+        );
+        // Accumulate steps instead of replacing them
+        setArcConsistencySteps(prevSteps => [...prevSteps, ...newSteps]);
+      }
+      
+      return result;
+    } catch (err) {
+      console.error('Arc consistency error:', err);
+      return null;
+    }
+  }, []);
+
   const resetSolver = useCallback(() => {
     setSolving(false);
     setSolved(false);
     setSolveTime(0);
+    setArcConsistencySteps([]);
+  }, []);
+
+  const clearArcSteps = useCallback(() => {
     setArcConsistencySteps([]);
   }, []);
 
@@ -49,7 +73,9 @@ const useSudokuSolver = () => {
     arcConsistencySteps,
     timeBreakdown: undefined, // Not currently used, but expected by GamePage
     solvePuzzle,
-    resetSolver
+    applyArcConsistency,
+    resetSolver,
+    clearArcSteps
   };
 };
 
