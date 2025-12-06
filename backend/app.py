@@ -128,6 +128,126 @@ def health_check():
         'service': 'Sudoku CSP Backend',
         'version': '1.0'
     })
+    
+# app.py (add this endpoint)
+@app.route('/api/check-consistency', methods=['POST'])
+def check_consistency():
+    """Check if the current board state has at least one solution"""
+    data = request.json
+    board = data.get('board')
+    
+    if not board or len(board) != 9 or any(len(row) != 9 for row in board):
+        return jsonify({'error': 'Invalid board format. Must be 9x9 grid.'}), 400
+    
+    # Create a copy of the board
+    board_copy = [row[:] for row in board]
+    
+    # Check if the board is valid
+    solver = SudokuCSP(board_copy)
+    is_valid, message = solver.validate_board()
+    
+    if not is_valid:
+        return jsonify({
+            'has_solution': False,
+            'message': f'Board is invalid: {message}',
+            'invalid_cells': find_invalid_cells(board_copy)
+        })
+    
+    # Apply arc consistency first
+    arc_consistent = solver.arc_consistency()
+    
+    if not arc_consistent:
+        return jsonify({
+            'has_solution': False,
+            'message': 'Board is inconsistent (no solution possible)',
+            'invalid_cells': []
+        })
+    
+    # If board is already solved, it's consistent
+    if all(0 not in row for row in solver.board):
+        return jsonify({
+            'has_solution': True,
+            'message': 'Board is solved and consistent',
+            'invalid_cells': []
+        })
+    
+    # Try to solve with backtracking (with timeout)
+    start_time = time.time()
+    solved = solver.solve_with_backtracking()
+    
+    if solved:
+        return jsonify({
+            'has_solution': True,
+            'message': 'Board has at least one solution',
+            'invalid_cells': []
+        })
+    else:
+        return jsonify({
+            'has_solution': False,
+            'message': 'Board has no solution',
+            'invalid_cells': find_contradiction_cells(board_copy, solver)
+        })
+
+
+def find_invalid_cells(board):
+    """Find cells that violate Sudoku rules"""
+    invalid_cells = []
+    
+    # Check rows
+    for row in range(9):
+        seen = {}
+        for col in range(9):
+            value = board[row][col]
+            if value != 0:
+                if value in seen:
+                    invalid_cells.append((row, col))
+                    invalid_cells.extend(seen[value])
+                else:
+                    seen[value] = [(row, col)]
+    
+    # Check columns
+    for col in range(9):
+        seen = {}
+        for row in range(9):
+            value = board[row][col]
+            if value != 0:
+                if value in seen:
+                    invalid_cells.append((row, col))
+                    invalid_cells.extend(seen[value])
+                else:
+                    seen[value] = [(row, col)]
+    
+    # Check subgrids
+    for grid_row in range(0, 9, 3):
+        for grid_col in range(0, 9, 3):
+            seen = {}
+            for i in range(3):
+                for j in range(3):
+                    row = grid_row + i
+                    col = grid_col + j
+                    value = board[row][col]
+                    if value != 0:
+                        if value in seen:
+                            invalid_cells.append((row, col))
+                            invalid_cells.extend(seen[value])
+                        else:
+                            seen[value] = [(row, col)]
+    
+    return list(set(invalid_cells))
+
+
+def find_contradiction_cells(board, solver):
+    """Find cells that likely caused the contradiction"""
+    # This is a simplified version - in practice you might want
+    # to use more sophisticated contradiction detection
+    contradiction_cells = []
+    
+    # Check for cells with empty domains after arc consistency
+    for (row, col), domain in solver.domains.items():
+        if board[row][col] == 0 and len(domain) == 0:
+            contradiction_cells.append((row, col))
+    
+    return contradiction_cells
 
 
 if __name__ == '__main__':

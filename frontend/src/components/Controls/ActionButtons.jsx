@@ -1,12 +1,17 @@
+// src/components/Controls/ActionButtons.jsx (updated)
 import React from 'react';
-import { Zap, RotateCcw } from 'lucide-react';
+import { Zap, RotateCcw, Lightbulb, Undo2 } from 'lucide-react';
 
 const ActionButtons = ({ 
   onSolve, 
   onReset, 
-  onClear, 
+  onClear,
+  onHint,
+  onUndo,
   solving, 
-  solved 
+  solved,
+  hintMode,
+  canUndo
 }) => {
   return (
     <div className="bg-white rounded-2xl shadow-lg p-6">
@@ -21,9 +26,29 @@ const ActionButtons = ({
           {solving ? 'Solving...' : 'Solve with CSP'}
         </button>
         
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={onHint}
+            disabled={hintMode}
+            className="bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+          >
+            <Lightbulb size={18} />
+            Hint
+          </button>
+          
+          <button
+            onClick={onUndo}
+            disabled={!canUndo}
+            className="bg-gray-600 text-white py-3 rounded-xl font-semibold hover:bg-gray-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+          >
+            <Undo2 size={18} />
+            Undo
+          </button>
+        </div>
+        
         <button
           onClick={onReset}
-          className="w-full bg-gray-600 text-white py-3 rounded-xl font-semibold hover:bg-gray-700 transition-all flex items-center justify-center gap-2"
+          className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
         >
           <RotateCcw size={20} />
           Reset
@@ -31,7 +56,7 @@ const ActionButtons = ({
         
         <button
           onClick={onClear}
-          className="w-full bg-red-600 text-white py-3 rounded-xl font-semibold hover:bg-red-700 transition-all flex items-center justify-center gap-2"
+          className="w-full bg-red-600 text-white py-3 rounded-xl font-semibold hover:bg-red-700 transition-all"
         >
           Clear Board
         </button>
