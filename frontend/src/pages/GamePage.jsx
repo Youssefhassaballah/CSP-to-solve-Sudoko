@@ -449,11 +449,11 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
 
           {/* Right Sidebar - Info */}
           <div className="lg:col-span-3 space-y-4">
-            {/* <DomainViewer
+            <DomainViewer
               selectedCell={selectedCell}
               domains={solved ? solverDomains : domains}
               board={board}
-            /> */}
+            />
 
             {(solved || isAnimating) && arcConsistencySteps.length > 0 ? (
               <ArcConsistencySteps steps={arcConsistencySteps} currentStep={currentStep} isAnimating={isAnimating} />

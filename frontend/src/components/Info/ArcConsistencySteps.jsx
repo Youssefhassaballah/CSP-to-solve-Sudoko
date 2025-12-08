@@ -6,6 +6,10 @@ const ArcConsistencySteps = ({ steps = [], currentStep = -1, isAnimating = false
   const [modalStepData, setModalStepData] = useState(null);
   const currentStepRef = useRef(null);
 
+  useEffect(() => {
+    console.log('ArcConsistencySteps received steps:', steps.length);
+  }, [steps]);
+
   // Auto-scroll to current step during animation
   useEffect(() => {
     if (isAnimating && currentStepRef.current) {

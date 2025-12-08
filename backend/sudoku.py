@@ -179,15 +179,52 @@ class SudokuCSP:
         return list(neighbors)
     
     def update_board_from_domains(self):
-        """Update board cells that have singleton domains (without recording assignment steps)"""
+        """Update board cells that have singleton domains and run arc consistency after each assignment"""
         updated = 0
+        
+        # Process cells with singleton domains
+        cells_to_assign = []
         for (row, col), domain in self.domains.items():
             if len(domain) == 1 and self.board[row][col] == 0:
                 value = next(iter(domain))
-                self.board[row][col] = value
-                updated += 1
-                # Don't record assignment steps for domain==1 cases
-                # All relevant arc consistency steps have already been recorded
+                cells_to_assign.append(((row, col), value))
+        
+        # Assign each cell and run arc consistency propagation after each one
+        for (row, col), value in cells_to_assign:
+            self.board[row][col] = value
+            updated += 1
+            
+            # Record this as a propagation/assignment step
+            domain_snapshot = {str(k): list(v) for k, v in self.domains.items()}
+            self.arc_consistency_steps.append({
+                'arc': ((row, col), (row, col)),  # Self-reference
+                'cell': (row, col),
+                'removed_values': [],
+                'domain_before': [value],
+                'domain_after': [value],
+                'domains_snapshot': domain_snapshot,
+                'is_cell_assignment': True,  # Mark as automatic assignment from arc consistency
+                'assigned_value': value,
+                'is_propagation': True  # Mark as propagation assignment
+            })
+            
+            # Run targeted arc consistency for neighbors of this newly assigned cell
+            # This ensures we record the constraint propagation steps
+            neighbors = self.get_neighbors((row, col))
+            for neighbor in neighbors:
+                # Check each arc involving this cell and its neighbors
+                if self.domains[neighbor]:  # Only if neighbor domain exists
+                    old_domain_size = len(self.domains[neighbor])
+                    # Revise the neighbor's domain based on this assignment
+                    self.revise(neighbor, (row, col))
+                    new_domain_size = len(self.domains[neighbor])
+                    
+                    # If domain changed, continue propagation
+                    if new_domain_size < old_domain_size and new_domain_size > 0:
+                        # Check if this newly reduced domain affects other cells
+                        for other_neighbor in self.get_neighbors(neighbor):
+                            if other_neighbor != (row, col):
+                                self.revise(other_neighbor, neighbor)
 
         return updated
     

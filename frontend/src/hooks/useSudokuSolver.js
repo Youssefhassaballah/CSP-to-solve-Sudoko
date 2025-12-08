@@ -27,6 +27,8 @@ const useSudokuSolver = () => {
 
     try {
       const result = await apiService.solvePuzzle(board);
+      console.log('API Result:', result);
+      console.log('Arc steps from API:', result.arc_consistency_steps ? result.arc_consistency_steps.length : 0);
 
       if (animated && result.arc_consistency_steps && result.arc_consistency_steps.length > 0) {
         // Store steps for animation
@@ -41,16 +43,14 @@ const useSudokuSolver = () => {
       } else {
         // Instant solve (no animation)
         setBoard(result.solved_board);
+        // Store arc consistency steps for display after instant solve
+        if (result.arc_consistency_steps && result.arc_consistency_steps.length > 0) {
+          setArcConsistencySteps(result.arc_consistency_steps);
+        }
       }
 
       setSolveTime(result.total_time * 1000); // Convert to ms
-      setSolved(true);
-
-      // Store arc consistency steps with full data (domains snapshots included)
-      if (result.arc_consistency_steps && result.arc_consistency_steps.length > 0) {
-        setArcConsistencySteps(result.arc_consistency_steps);
-      }
-
+      
       // Store and share domains
       if (result.domains) {
         setDomains(result.domains);
@@ -59,6 +59,9 @@ const useSudokuSolver = () => {
           setGameDomains(result.domains);
         }
       }
+      
+      // Mark as solved AFTER all other state is set
+      setSolved(true);
     } catch (err) {
       console.error('Solving error:', err);
       alert(`Failed to solve: ${err.message}`);

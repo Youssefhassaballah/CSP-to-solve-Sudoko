@@ -45,7 +45,7 @@ const SolverControls = ({
             Solve Instantly
           </button>
 
-          <button
+          {/* <button
             onClick={onSolveAnimated}
             disabled={solving}
             className="w-full bg-gradient-to-r from-indigo-500 to-blue-600 text-white py-3 rounded-xl font-semibold hover:from-indigo-600 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -55,7 +55,7 @@ const SolverControls = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             Watch AI Solve
-          </button>
+          </button> */}
         </div>
       )}
 
