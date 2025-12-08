@@ -6,3 +6,4 @@ export { default as ScoreBoard } from './ScoreBoard';
 export { default as ValidationStatus } from './ValidationStatus';
 export { default as DomainViewer } from './DomainViewer';
 export { default as ArcConsistencyVisualization } from './ArcConsistencyVisualization';
+export { default as AllBoardDomains } from './AllBoardDomains';

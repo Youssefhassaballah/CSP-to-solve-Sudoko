@@ -91,49 +91,33 @@ export const apiService = {
 // Helper function for validating custom boards
 export const validateCustomBoard = async (board) => {
   try {
-    const response = await apiService.validatePuzzle(board);
+    // Use check-consistency endpoint which returns domains
+    const consistencyResponse = await apiService.checkConsistency(board);
 
-    // Backend returns snake_case, so check for both is_valid and isValid
-    const isValidResponse = response.is_valid ?? response.isValid;
-    const hasViolations = !isValidResponse;
-
-    if (hasViolations) {
+    if (!consistencyResponse.has_solution) {
       return {
-        isValid: false,
+        isValid: consistencyResponse.invalid_cells && consistencyResponse.invalid_cells.length === 0,
         isSolvable: false,
-        message: response.message || 'Board contains Sudoku rule violations (duplicate numbers in row/column/box)'
+        message: consistencyResponse.message || 'Board has no solution',
+        domains: consistencyResponse.domains || {},
+        arcConsistencySteps: consistencyResponse.arc_consistency_steps || []
       };
     }
 
-    // Try to solve the board to check if it's solvable
-    try {
-      const solveResponse = await apiService.solvePuzzle(board);
-
-      if (solveResponse.solved_board) {
-        return {
-          isValid: true,
-          isSolvable: true,
-          message: '✓ Board is valid and solvable! You can now solve it with CSP.'
-        };
-      } else {
-        return {
-          isValid: true,
-          isSolvable: false,
-          message: 'Board is valid but has no solution. Try modifying some cells.'
-        };
-      }
-    } catch (solveError) {
-      return {
-        isValid: true,
-        isSolvable: false,
-        message: 'Board is valid but could not be solved. It may have no solution or multiple solutions.'
-      };
-    }
+    return {
+      isValid: true,
+      isSolvable: true,
+      message: '✓ Board is valid and solvable! You can now solve it with CSP.',
+      domains: consistencyResponse.domains || {},
+      arcConsistencySteps: consistencyResponse.arc_consistency_steps || []
+    };
   } catch (error) {
     return {
       isValid: false,
       isSolvable: false,
-      message: `Validation error: ${error.message}`
+      message: `Validation error: ${error.message}`,
+      domains: {},
+      arcConsistencySteps: []
     };
   }
 };

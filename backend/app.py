@@ -51,8 +51,14 @@ def solve_sudoku():
             'arc': [list(step['arc'][0]), list(step['arc'][1])],
             'cell': list(step['cell']),
             'removed_values': step['removed_values'],
-            'remaining_domain': step['remaining_domain'],
-            'domains_snapshot': step['domains_snapshot']
+            'domain_before': step.get('domain_before', []),
+            'domain_after': step.get('domain_after', step.get('remaining_domain', [])),
+            'arc_domains': step.get('arc_domains', {}),
+            'domains_snapshot': step.get('domains_snapshot', {}),  # Keep for backtracking steps
+            'is_cell_assignment': step.get('is_cell_assignment', False),
+            'assigned_value': step.get('assigned_value', None),
+            'is_backtracking': step.get('is_backtracking', False),
+            'is_unassignment': step.get('is_unassignment', False)
         })
     
     return jsonify({
@@ -169,7 +175,23 @@ def check_consistency():
     arc_consistent = solver.arc_consistency()
 
     # Get arc consistency steps and domains
-    arc_steps = solver.arc_consistency_steps
+    # Serialize arc consistency steps to JSON format
+    serializable_steps = []
+    for step in solver.arc_consistency_steps:
+        serializable_steps.append({
+            'arc': [list(step['arc'][0]), list(step['arc'][1])],
+            'cell': list(step['cell']),
+            'removed_values': step['removed_values'],
+            'domain_before': step.get('domain_before', []),
+            'domain_after': step.get('domain_after', step.get('remaining_domain', [])),
+            'arc_domains': step.get('arc_domains', {}),
+            'domains_snapshot': step.get('domains_snapshot', {}),  # Keep for backtracking steps
+            'is_cell_assignment': step.get('is_cell_assignment', False),
+            'assigned_value': step.get('assigned_value', None),
+            'is_backtracking': step.get('is_backtracking', False),
+            'is_unassignment': step.get('is_unassignment', False)
+        })
+
     domains = {str(k): list(v) for k, v in solver.domains.items()}
 
     if not arc_consistent:
@@ -177,7 +199,7 @@ def check_consistency():
             'has_solution': False,
             'message': 'Board is inconsistent (no solution possible)',
             'invalid_cells': [],
-            'arc_consistency_steps': arc_steps,
+            'arc_consistency_steps': serializable_steps,
             'domains': domains
         })
 
@@ -187,7 +209,7 @@ def check_consistency():
             'has_solution': True,
             'message': 'Board is solved and consistent',
             'invalid_cells': [],
-            'arc_consistency_steps': arc_steps,
+            'arc_consistency_steps': serializable_steps,
             'domains': domains
         })
 
@@ -200,7 +222,7 @@ def check_consistency():
             'has_solution': True,
             'message': 'Board has at least one solution',
             'invalid_cells': [],
-            'arc_consistency_steps': arc_steps,
+            'arc_consistency_steps': serializable_steps,
             'domains': domains
         })
     else:
@@ -208,7 +230,7 @@ def check_consistency():
             'has_solution': False,
             'message': 'Board has no solution',
             'invalid_cells': find_contradiction_cells(board_copy, solver),
-            'arc_consistency_steps': arc_steps,
+            'arc_consistency_steps': serializable_steps,
             'domains': domains
         })
 

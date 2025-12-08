@@ -15,13 +15,31 @@ class SudokuCSP:
         self.arc_consistency_steps = []
     
     def initialize_domains(self):
+        """Initialize domains based on current board state"""
         for row in range(self.size):
             for col in range(self.size):
                 if self.board[row][col] != 0:
+                    # Fixed cells have singleton domains
                     self.domains[(row, col)] = {self.board[row][col]}
                 else:
+                    # Empty cells start with all possible values
                     self.domains[(row, col)] = set(range(1, 10))
-    
+
+        # Apply initial constraint propagation to reduce domains
+        self._apply_initial_constraints()
+
+    def _apply_initial_constraints(self):
+        """Remove values from domains based on already-filled cells"""
+        for row in range(self.size):
+            for col in range(self.size):
+                if self.board[row][col] != 0:
+                    # This cell is filled, remove its value from all neighbors
+                    value = self.board[row][col]
+                    for neighbor in self.get_neighbors((row, col)):
+                        if self.board[neighbor[0]][neighbor[1]] == 0:
+                            # Only update domains of empty cells
+                            self.domains[neighbor].discard(value)
+
     def get_arcs(self):
         arcs = []
         
@@ -65,37 +83,44 @@ class SudokuCSP:
     def revise(self, xi, xj) :
         revised = False
         values_to_remove = set()
-        
+
+        # Store domain before revision for comparison
+        domain_before = list(self.domains[xi])
+
         for value in self.domains[xi]:
             # Check if there exists at least one value in domain of xj
             # that is compatible with current value in xi
             compatible = False
-            
+
             for other_value in self.domains[xj]:
                 if value != other_value:
                     compatible = True
                     break
-            
+
             if not compatible:
                 values_to_remove.add(value)
                 revised = True
-        
+
         # Remove inconsistent values
         self.domains[xi] -= values_to_remove
-        
-        # Record step for visualization
+
+        # Record step for visualization - only store domains of the two cells in the arc
         if revised and values_to_remove:
-            # Create a snapshot of all domains after this revision
-            domain_snapshot = {str(k): list(v) for k, v in self.domains.items()}
+            # Only store domains for the two cells involved in this arc
+            arc_domains = {
+                str(xi): list(self.domains[xi]),
+                str(xj): list(self.domains[xj])
+            }
 
             self.arc_consistency_steps.append({
                 'arc': (xi, xj),
                 'cell': xi,
                 'removed_values': list(values_to_remove),
-                'remaining_domain': list(self.domains[xi]),
-                'domains_snapshot': domain_snapshot
+                'domain_before': domain_before,
+                'domain_after': list(self.domains[xi]),
+                'arc_domains': arc_domains  # Only the two cells in the arc
             })
-        
+
         return revised
     
     def arc_consistency(self):
@@ -145,13 +170,27 @@ class SudokuCSP:
         return list(neighbors)
     
     def update_board_from_domains(self):
+        """Update board cells that have singleton domains and record the assignments"""
         updated = 0
         for (row, col), domain in self.domains.items():
             if len(domain) == 1 and self.board[row][col] == 0:
                 value = next(iter(domain))
                 self.board[row][col] = value
                 updated += 1
-        
+
+                # Record this cell assignment as a special step for visualization
+                domain_snapshot = {str(k): list(v) for k, v in self.domains.items()}
+                self.arc_consistency_steps.append({
+                    'arc': ((row, col), (row, col)),  # Self-reference for cell assignment
+                    'cell': (row, col),
+                    'removed_values': [],
+                    'domain_before': [value],
+                    'domain_after': [value],
+                    'domains_snapshot': domain_snapshot,
+                    'is_cell_assignment': True,  # Flag to identify cell assignments
+                    'assigned_value': value
+                })
+
         return updated
     
     def solve_with_backtracking(self):
@@ -161,10 +200,10 @@ class SudokuCSP:
         # If all cells are assigned, solution is complete
         if len(assignment) == self.size * self.size:
             return True
-        
+
         # Select unassigned variable using MRV heuristic
         var = self.select_unassigned_variable(assignment)
-        
+
         # Try values in order
         for value in self.order_domain_values(var, assignment):
             # Check if assignment is consistent
@@ -172,22 +211,51 @@ class SudokuCSP:
                 # Make assignment
                 assignment[var] = value
                 self.board[var[0]][var[1]] = value
-                
+
                 # Save current domains for backtracking
                 old_domains = copy.deepcopy(self.domains)
                 self.domains[var] = {value}
-                
+
+                # Record this cell assignment as a step for visualization
+                domain_snapshot = {str(k): list(v) for k, v in self.domains.items()}
+                self.arc_consistency_steps.append({
+                    'arc': (var, var),  # Self-reference for backtracking assignment
+                    'cell': var,
+                    'removed_values': [],
+                    'domain_before': list(old_domains[var]),
+                    'domain_after': [value],
+                    'domains_snapshot': domain_snapshot,
+                    'is_cell_assignment': True,
+                    'assigned_value': value,
+                    'is_backtracking': True  # Flag to distinguish backtracking from arc consistency
+                })
+
                 # Apply forward checking (optional)
                 if self.forward_check(var, value):
                     # Recursive call
                     if self.backtrack(assignment):
                         return True
-                
-                # Backtrack
+
+                # Backtrack - record the unassignment step
                 del assignment[var]
                 self.board[var[0]][var[1]] = 0
                 self.domains = old_domains
-        
+
+                # Record backtracking (unassignment) step
+                domain_snapshot = {str(k): list(v) for k, v in self.domains.items()}
+                self.arc_consistency_steps.append({
+                    'arc': (var, var),
+                    'cell': var,
+                    'removed_values': [],
+                    'domain_before': [value],
+                    'domain_after': list(self.domains[var]),
+                    'domains_snapshot': domain_snapshot,
+                    'is_cell_assignment': False,
+                    'assigned_value': None,
+                    'is_backtracking': True,
+                    'is_unassignment': True  # Flag for backtracking unassignment
+                })
+
         return False
     
     def select_unassigned_variable(self, assignment):

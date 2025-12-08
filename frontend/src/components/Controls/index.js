@@ -4,3 +4,4 @@ export { default as ActionButtons } from './ActionButtons';
 export { default as NumberInput } from './NumberInput';
 export { default as GameControls } from './GameControls';
 export { default as CustomBoardActions } from './CustomBoardActions';
+export { default as SolverControls } from './SolverControls';

@@ -57,6 +57,28 @@ const useSudokuGame = () => {
     // Always update the board, even if invalid
     setBoard(newBoard);
 
+    setValidating(true);
+
+    // Always run advanced consistency check (with arc consistency analysis)
+    const consistency = await checkMoveConsistency(newBoard, row, col, number);
+
+    // Update arc consistency steps for this move (keep raw format for detailed visualization)
+    // Add a 'failed' flag to each step if consistency check failed
+    if (consistency.arcConsistencySteps && consistency.arcConsistencySteps.length > 0) {
+      const stepsWithStatus = consistency.arcConsistencySteps.map(step => ({
+        ...step,
+        isFailed: !consistency.isConsistent
+      }));
+      setMoveArcConsistencySteps(stepsWithStatus);
+    } else {
+      setMoveArcConsistencySteps([]);
+    }
+
+    // Update domains from consistency check
+    if (consistency.domains) {
+      setDomains(consistency.domains);
+    }
+
     // Basic validation - show error but don't prevent the move
     if (number !== 0 && !isValidMove(newBoard, row, col, number)) {
       setError('❌ Invalid move! Number already exists in row, column, or subgrid');
@@ -71,27 +93,8 @@ const useSudokuGame = () => {
         scoreChange: -50,
         isInvalid: true
       }]);
+      setValidating(false);
       return;
-    }
-
-    setValidating(true);
-
-    // Advanced consistency check (with arc consistency analysis)
-    const consistency = await checkMoveConsistency(newBoard, row, col, number);
-
-    // Update arc consistency steps for this move
-    if (consistency.arcConsistencySteps && consistency.arcConsistencySteps.length > 0) {
-      const formattedSteps = consistency.arcConsistencySteps.map(step =>
-        `Arc (${step.arc[0]}) → (${step.arc[1]}): Removed ${step.removed_values.join(', ')} from cell (${step.cell[0]+1}, ${step.cell[1]+1})`
-      );
-      setMoveArcConsistencySteps(formattedSteps);
-    } else {
-      setMoveArcConsistencySteps([]);
-    }
-
-    // Update domains from consistency check
-    if (consistency.domains) {
-      setDomains(consistency.domains);
     }
 
     if (!consistency.isConsistent) {
@@ -280,8 +283,10 @@ const useSudokuGame = () => {
     moves,
     hintMode,
     moveArcConsistencySteps,
+    setMoveArcConsistencySteps,
     loading,
     domains,
+    setDomains,
     handleCellClick,
     handleNumberInput,
     handleKeyPress,

@@ -1,7 +1,7 @@
 // src/pages/GamePage.jsx
 import React, { useEffect, useState, useRef } from 'react';
 import { SudokuBoard } from '../components/Board';
-import { ActionButtons, NumberInput, CustomBoardActions } from '../components/Controls';
+import { ActionButtons, NumberInput, CustomBoardActions, SolverControls } from '../components/Controls';
 import {
   ErrorMessage,
   Statistics,
@@ -9,7 +9,8 @@ import {
   Legend,
   ValidationStatus,
   DomainViewer,
-  ArcConsistencyVisualization
+  ArcConsistencyVisualization,
+  AllBoardDomains
 } from '../components/Info';
 import useSudokuGame from '../hooks/useSudokuGame';
 import useSudokuSolver from '../hooks/useSudokuSolver';
@@ -31,8 +32,12 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
     setDifficulty,
     validating,
     moveArcConsistencySteps,
+    setMoveArcConsistencySteps,
     loading,
     domains,
+    setDomains,
+    autoCompleteEnabled,
+    setAutoCompleteEnabled,
     handleCellClick,
     handleNumberInput,
     handleKeyPress,
@@ -50,9 +55,17 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
     solveTime,
     arcConsistencySteps,
     domains: solverDomains,
+    isAnimating,
+    currentStep,
+    animationSpeed,
+    isPaused,
     timeBreakdown,
     solvePuzzle,
-    resetSolver
+    resetSolver,
+    pauseAnimation,
+    resumeAnimation,
+    stopAnimation,
+    setAnimationSpeed
   } = useSudokuSolver();
 
   const [isCustomMode, setIsCustomMode] = useState(false);
@@ -82,6 +95,16 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
 
     const result = await validateCustomBoard(board);
 
+    // Store domains from validation
+    if (result.domains) {
+      setDomains(result.domains);
+    }
+
+    // Store arc consistency steps from validation
+    if (result.arcConsistencySteps && result.arcConsistencySteps.length > 0) {
+      setMoveArcConsistencySteps(result.arcConsistencySteps);
+    }
+
     if (result.isValid && result.isSolvable) {
       setValidationStatus('valid');
       setValidationMessage(result.message);
@@ -107,7 +130,21 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
 
     // Disable edit mode when solving
     setIsEditMode(false);
-    solvePuzzle(board, setBoard, setDomains);
+    // Pass setDomains from useSudokuGame to update domains after solving (instant solve)
+    solvePuzzle(board, setBoard, setDomains, false);
+  };
+
+  const handleSolveAnimated = () => {
+    if (isCustomMode && !isValidated) {
+      setValidationStatus('warning');
+      setValidationMessage('Please validate the board first');
+      return;
+    }
+
+    // Disable edit mode when solving
+    setIsEditMode(false);
+    // Animated solve - watch AI step by step
+    solvePuzzle(board, setBoard, setDomains, true, setMoveArcConsistencySteps);
   };
 
   const handleReset = () => {
@@ -267,16 +304,36 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
               />
             ) : (
               <>
-                <ActionButtons
+                {/* AI Solver Controls with Animation */}
+                <SolverControls
                   onSolve={handleSolve}
-                  onReset={handleReset}
-                  onClear={handleClear}
-                  onHint={provideHint}
-                  onUndo={undoMove}
+                  onSolveAnimated={handleSolveAnimated}
+                  isAnimating={isAnimating}
+                  isPaused={isPaused}
+                  onPause={pauseAnimation}
+                  onResume={resumeAnimation}
+                  onStop={stopAnimation}
+                  animationSpeed={animationSpeed}
+                  onSpeedChange={setAnimationSpeed}
                   solving={solving}
                   solved={solved}
-                  canUndo={moves && moves.length > 0}
+                  currentStep={currentStep}
+                  totalSteps={arcConsistencySteps.length}
                 />
+
+                {/* Game Actions */}
+                {!isAnimating && (
+                  <ActionButtons
+                    onSolve={handleSolve}
+                    onReset={handleReset}
+                    onClear={handleClear}
+                    onHint={provideHint}
+                    onUndo={undoMove}
+                    solving={solving}
+                    solved={solved}
+                    canUndo={moves && moves.length > 0}
+                  />
+                )}
 
                 {/* Edit Board Button */}
                 {!isEditMode && !solved && (
@@ -385,6 +442,9 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
                 message={validationMessage}
               />
             )}
+
+            {/* All Board Domains Display */}
+            <AllBoardDomains domains={solved ? solverDomains : domains} board={board} />
           </div>
 
           {/* Right Sidebar - Info */}
@@ -395,8 +455,8 @@ const GamePage = ({ mode: initialMode, difficulty: initialDifficulty, onBack }) 
               board={board}
             />
 
-            {solved && arcConsistencySteps.length > 0 ? (
-              <ArcConsistencySteps steps={arcConsistencySteps} />
+            {(solved || isAnimating) && arcConsistencySteps.length > 0 ? (
+              <ArcConsistencySteps steps={arcConsistencySteps} currentStep={currentStep} isAnimating={isAnimating} />
             ) : !solved && moveArcConsistencySteps.length > 0 ? (
               <ArcConsistencySteps steps={moveArcConsistencySteps} />
             ) : (
