@@ -45,21 +45,7 @@ def solve_sudoku():
         backtrack_time = 0
     
     # Convert arc consistency steps to JSON-serializable format
-    serializable_steps = []
-    for step in solver.arc_consistency_steps:
-        serializable_steps.append({
-            'arc': [list(step['arc'][0]), list(step['arc'][1])],
-            'cell': list(step['cell']),
-            'removed_values': step['removed_values'],
-            'domain_before': step.get('domain_before', []),
-            'domain_after': step.get('domain_after', step.get('remaining_domain', [])),
-            'arc_domains': step.get('arc_domains', {}),
-            'domains_snapshot': step.get('domains_snapshot', {}),  # Keep for backtracking steps
-            'is_cell_assignment': step.get('is_cell_assignment', False),
-            'assigned_value': step.get('assigned_value', None),
-            'is_backtracking': step.get('is_backtracking', False),
-            'is_unassignment': step.get('is_unassignment', False)
-        })
+    serializable_steps = serialize_arc_steps(solver.arc_consistency_steps)
     
     return jsonify({
         'solved_board': solver.board,
@@ -147,7 +133,41 @@ def health_check():
         'version': '1.0'
     })
     
-# app.py (add this endpoint)
+def serialize_arc_steps(steps):
+    """Safely serialize arc consistency steps to JSON-compatible format"""
+    serializable_steps = []
+    for step in steps:
+        try:
+            # Handle both tuple and list formats for arc and cell
+            arc = step.get('arc', ((), ()))
+            cell = step.get('cell', ())
+            
+            # Convert tuples to lists
+            arc_from = list(arc[0]) if len(arc) > 0 else [0, 0]
+            arc_to = list(arc[1]) if len(arc) > 1 else [0, 0]
+            cell_coords = list(cell) if cell else [0, 0]
+            
+            serializable_steps.append({
+                'arc': [arc_from, arc_to],
+                'cell': cell_coords,
+                'removed_values': step.get('removed_values', []),
+                'domain_before': list(step.get('domain_before', [])),
+                'domain_after': list(step.get('domain_after', step.get('remaining_domain', []))),
+                'arc_domains': step.get('arc_domains', {}),
+                'domains_snapshot': step.get('domains_snapshot', {}),
+                'is_cell_assignment': step.get('is_cell_assignment', False),
+                'assigned_value': step.get('assigned_value', None),
+                'is_backtracking': step.get('is_backtracking', False),
+                'is_unassignment': step.get('is_unassignment', False),
+                'domain_reduced_to_one': step.get('domain_reduced_to_one', False),
+                'reduced_to_value': step.get('reduced_to_value', None)
+            })
+        except Exception as e:
+            print(f"Error serializing step: {e}")
+            continue
+    return serializable_steps
+
+
 @app.route('/api/check-consistency', methods=['POST'])
 def check_consistency():
     """Check if the current board state has at least one solution"""
@@ -168,30 +188,16 @@ def check_consistency():
         return jsonify({
             'has_solution': False,
             'message': f'Board is invalid: {message}',
-            'invalid_cells': find_invalid_cells(board_copy)
+            'invalid_cells': find_invalid_cells(board_copy),
+            'arc_consistency_steps': [],
+            'domains': {}
         })
     
     # Apply arc consistency first
     arc_consistent = solver.arc_consistency()
 
     # Get arc consistency steps and domains
-    # Serialize arc consistency steps to JSON format
-    serializable_steps = []
-    for step in solver.arc_consistency_steps:
-        serializable_steps.append({
-            'arc': [list(step['arc'][0]), list(step['arc'][1])],
-            'cell': list(step['cell']),
-            'removed_values': step['removed_values'],
-            'domain_before': step.get('domain_before', []),
-            'domain_after': step.get('domain_after', step.get('remaining_domain', [])),
-            'arc_domains': step.get('arc_domains', {}),
-            'domains_snapshot': step.get('domains_snapshot', {}),  # Keep for backtracking steps
-            'is_cell_assignment': step.get('is_cell_assignment', False),
-            'assigned_value': step.get('assigned_value', None),
-            'is_backtracking': step.get('is_backtracking', False),
-            'is_unassignment': step.get('is_unassignment', False)
-        })
-
+    serializable_steps = serialize_arc_steps(solver.arc_consistency_steps)
     domains = {str(k): list(v) for k, v in solver.domains.items()}
 
     if not arc_consistent:

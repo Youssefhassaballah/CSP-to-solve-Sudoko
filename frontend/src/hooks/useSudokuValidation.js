@@ -21,6 +21,15 @@ const useSudokuValidation = () => {
       const invalidCells = result.invalid_cells || [];
       const isCellInvalid = invalidCells.some(([r, c]) => r === row && c === col);
       
+      // Safely parse arc consistency steps
+      let arcSteps = [];
+      try {
+        arcSteps = Array.isArray(result.arc_consistency_steps) ? result.arc_consistency_steps : [];
+      } catch (e) {
+        console.warn('Could not parse arc consistency steps:', e);
+        arcSteps = [];
+      }
+      
       setValidationState({
         isValid: result.has_solution,
         message: result.message,
@@ -34,7 +43,7 @@ const useSudokuValidation = () => {
         isConsistent: result.has_solution,
         isCellInvalid: isCellInvalid,
         message: result.message,
-        arcConsistencySteps: result.arc_consistency_steps || [],
+        arcConsistencySteps: arcSteps,
         domains: result.domains || {}
       };
     } catch (err) {
@@ -43,7 +52,9 @@ const useSudokuValidation = () => {
       return {
         isConsistent: true,
         isCellInvalid: false,
-        message: 'Could not verify consistency'
+        message: 'Could not verify consistency',
+        arcConsistencySteps: [],
+        domains: {}
       };
     }
   }, []);

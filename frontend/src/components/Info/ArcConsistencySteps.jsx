@@ -45,40 +45,64 @@ const ArcConsistencySteps = ({ steps = [], currentStep = -1, isAnimating = false
       <h3 className="text-lg font-semibold mb-4 text-gray-800">Arc Consistency Steps ({steps.length})</h3>
       <div className="space-y-2 max-h-[600px] overflow-y-auto">
         {steps.map((step, index) => {
-          if (isStringSteps) {
-            // Old format: simple strings
-            return (
-              <div
-                key={index}
-                className="p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg text-sm text-gray-700 border border-indigo-100"
-              >
-                <span className="font-semibold text-indigo-600">Step {index + 1}:</span> {step}
-              </div>
-            );
-          }
+          try {
+            if (isStringSteps) {
+              // Old format: simple strings
+              return (
+                <div
+                  key={index}
+                  className="p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg text-sm text-gray-700 border border-indigo-100"
+                >
+                  <span className="font-semibold text-indigo-600">Step {index + 1}:</span> {step}
+                </div>
+              );
+            }
 
-          // New format: detailed step objects with domains
-          const isExpanded = expandedStep === index;
-          const isFailed = step.isFailed || false; // Check if this step is from a failed consistency
-          const isCellAssignment = step.is_cell_assignment || false; // Check if this step assigns a value
-          const isDomainReducedToOne = !isCellAssignment && step.domain_after && step.domain_after.length === 1; // Domain reduced to 1 value
-          const isCurrentStep = isAnimating && index === currentStep; // Check if this is the current animation step
-          const isPastStep = isAnimating && index < currentStep; // Steps that have already played
+            // Safety checks
+            if (!step || typeof step !== 'object') {
+              return (
+                <div key={index} className="p-3 bg-gray-50 rounded-lg text-sm text-gray-600 border border-gray-200">
+                  Invalid step data
+                </div>
+              );
+            }
 
-          // Handle both tuple and array formats for cell and arc
-          const cellCoords = Array.isArray(step.cell) ? step.cell : [step.cell[0], step.cell[1]];
-          const arcFrom = Array.isArray(step.arc[0]) ? step.arc[0] : [step.arc[0][0], step.arc[0][1]];
-          const arcTo = Array.isArray(step.arc[1]) ? step.arc[1] : [step.arc[1][0], step.arc[1][1]];
+            // New format: detailed step objects with domains
+            const isExpanded = expandedStep === index;
+            const isDomainEmptyAfter = step.domain_after && Array.isArray(step.domain_after) && step.domain_after.length === 0; // Domain became empty (error state)
+            const isCellAssignment = step.is_cell_assignment || false; // Check if this step assigns a value
+            const isDomainReducedToOne = !isCellAssignment && step.domain_after && Array.isArray(step.domain_after) && step.domain_after.length === 1; // Domain reduced to 1 value
+            const isCurrentStep = isAnimating && index === currentStep; // Check if this is the current animation step
+            const isPastStep = isAnimating && index < currentStep; // Steps that have already played
 
-          const cellPos = `(${cellCoords[0] + 1}, ${cellCoords[1] + 1})`;
-          const arcFromStr = `(${arcFrom[0] + 1}, ${arcFrom[1] + 1})`;
-          const arcToStr = `(${arcTo[0] + 1}, ${arcTo[1] + 1})`;
+            // Handle both tuple and array formats for cell and arc - with safety checks
+            let cellCoords = [0, 0];
+            let arcFrom = [0, 0];
+            let arcTo = [0, 0];
+            
+            try {
+              if (step.cell) {
+                cellCoords = Array.isArray(step.cell) ? step.cell : [step.cell[0] || 0, step.cell[1] || 0];
+              }
+              if (step.arc && step.arc[0]) {
+                arcFrom = Array.isArray(step.arc[0]) ? step.arc[0] : [step.arc[0][0] || 0, step.arc[0][1] || 0];
+              }
+              if (step.arc && step.arc[1]) {
+                arcTo = Array.isArray(step.arc[1]) ? step.arc[1] : [step.arc[1][0] || 0, step.arc[1][1] || 0];
+              }
+            } catch (e) {
+              console.warn('Error parsing step coordinates:', e);
+            }
+
+            const cellPos = `(${cellCoords[0] + 1}, ${cellCoords[1] + 1})`;
+            const arcFromStr = `(${arcFrom[0] + 1}, ${arcFrom[1] + 1})`;
+            const arcToStr = `(${arcTo[0] + 1}, ${arcTo[1] + 1})`;
 
           // Determine border and background colors based on state
           let borderColor = 'border-indigo-200';
           let bgGradient = 'bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100';
 
-          if (isFailed) {
+          if (isDomainEmptyAfter) {
             borderColor = 'border-red-400 bg-red-50';
             bgGradient = 'bg-gradient-to-r from-red-50 to-orange-50 hover:from-red-100 hover:to-orange-100';
           } else if (isCurrentStep) {
@@ -108,20 +132,19 @@ const ArcConsistencySteps = ({ steps = [], currentStep = -1, isAnimating = false
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`font-semibold ${
-                        isFailed ? 'text-red-600'
-                        : isCurrentStep ? 'text-yellow-700'
+                        isDomainEmptyAfter ? 'text-red-600'
                         : isCellAssignment ? 'text-green-700'
                         : isDomainReducedToOne ? 'text-blue-700'
                         : 'text-indigo-600'
                       }`}>
                         Step {index + 1}:
                       </span>
-                      {isFailed && (
+                      {isDomainEmptyAfter && (
                         <span className="px-2 py-0.5 bg-red-200 text-red-800 text-xs font-bold rounded animate-pulse">
-                          FAILED
+                          ⚠ EMPTY DOMAIN
                         </span>
                       )}
-                      {isCellAssignment && !isFailed && (
+                      {isCellAssignment && !isDomainEmptyAfter && (
                         <span className="px-2 py-0.5 bg-green-200 text-green-800 text-xs font-bold rounded flex items-center gap-1">
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -129,7 +152,7 @@ const ArcConsistencySteps = ({ steps = [], currentStep = -1, isAnimating = false
                           Cell Assigned: {step.assigned_value}
                         </span>
                       )}
-                      {isDomainReducedToOne && !isCellAssignment && !isFailed && (
+                      {isDomainReducedToOne && !isCellAssignment && !isDomainEmptyAfter && (
                         <span className="px-2 py-0.5 bg-blue-200 text-blue-800 text-xs font-bold rounded flex items-center gap-1">
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -147,6 +170,10 @@ const ArcConsistencySteps = ({ steps = [], currentStep = -1, isAnimating = false
                       <span className="text-gray-700 ml-2">
                         Assigned value <span className="font-semibold text-green-600">{step.assigned_value}</span> to cell {cellPos}
                         {step.is_backtracking && <span className="text-blue-600 font-semibold"> (via backtracking)</span>}
+                      </span>
+                    ) : isDomainEmptyAfter ? (
+                      <span className="text-gray-700 ml-2">
+                        Arc {arcFromStr} → {arcToStr}: <span className="font-semibold text-red-600">DOMAIN BECAME EMPTY</span> for cell {cellPos}
                       </span>
                     ) : isDomainReducedToOne ? (
                       <span className="text-gray-700 ml-2">
@@ -171,12 +198,12 @@ const ArcConsistencySteps = ({ steps = [], currentStep = -1, isAnimating = false
 
               {isExpanded && (
                 <div className={`p-4 border-t ${
-                  isFailed ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-indigo-200'
+                  isDomainEmptyAfter ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-indigo-200'
                 }`}>
                   {/* Before and After Domain Comparison for the affected cell */}
                   {step.domain_before && step.domain_after && (
                     <div className={`mb-4 p-3 bg-white rounded-lg border-2 ${
-                      isFailed ? 'border-red-400' : 'border-purple-200'
+                      isDomainEmptyAfter ? 'border-red-400' : 'border-purple-200'
                     }`}>
                       <p className="text-xs font-semibold text-gray-700 mb-3">
                         Domain Changes for Cell {cellPos}:
@@ -315,6 +342,14 @@ const ArcConsistencySteps = ({ steps = [], currentStep = -1, isAnimating = false
               )}
             </div>
           );
+        } catch (err) {
+          console.error('Error rendering step:', err);
+          return (
+            <div key={index} className="p-3 bg-red-50 rounded-lg text-sm text-red-600 border border-red-200">
+              Error rendering step: {err.message}
+            </div>
+          );
+        }
         })}
       </div>
 

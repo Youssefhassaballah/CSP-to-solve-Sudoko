@@ -32,109 +32,130 @@ const useSudokuGame = () => {
   }, []);
 
   const handleNumberInput = useCallback(async (number, skipValidation = false) => {
-    if (!selectedCell) return;
+    try {
+      if (!selectedCell) return;
 
-    const { row, col } = selectedCell;
+      const { row, col } = selectedCell;
 
-    // In custom mode, allow all edits without validation
-    if (mode === 'custom' || skipValidation) {
+      // In custom mode, allow all edits without validation
+      if (mode === 'custom' || skipValidation) {
+        const newBoard = board.map(r => [...r]);
+        newBoard[row][col] = number;
+        setBoard(newBoard);
+        setError('');
+        return;
+      }
+
+      // Don't allow modification of initial values in other modes
+      if (initialBoard[row][col] !== 0) {
+        setError('Cannot modify initial puzzle values');
+        return;
+      }
+
       const newBoard = board.map(r => [...r]);
       newBoard[row][col] = number;
+
+      // Always update the board, even if invalid
       setBoard(newBoard);
+
+      setValidating(true);
+
+      // Always run advanced consistency check (with arc consistency analysis)
+      let consistency = null;
+      try {
+        consistency = await checkMoveConsistency(newBoard, row, col, number);
+      } catch (err) {
+        console.error('Consistency check failed:', err);
+        consistency = {
+          isConsistent: true,
+          isCellInvalid: false,
+          message: 'Could not verify consistency',
+          arcConsistencySteps: [],
+          domains: {}
+        };
+      }
+
+      // Update arc consistency steps for this move (keep raw format for detailed visualization)
+      // Add a 'failed' flag to each step if consistency check failed
+      if (consistency && consistency.arcConsistencySteps && Array.isArray(consistency.arcConsistencySteps) && consistency.arcConsistencySteps.length > 0) {
+        const stepsWithStatus = consistency.arcConsistencySteps.map(step => ({
+          ...step,
+          isFailed: !consistency.isConsistent
+        }));
+        setMoveArcConsistencySteps(stepsWithStatus);
+      } else {
+        setMoveArcConsistencySteps([]);
+      }
+
+      // Update domains from consistency check
+      if (consistency && consistency.domains && typeof consistency.domains === 'object') {
+        setDomains(consistency.domains);
+      } else {
+        setDomains({});
+      }
+
+      // Basic validation - show error but don't prevent the move
+      if (number !== 0 && !isValidMove(newBoard, row, col, number)) {
+        setError('❌ Invalid move! Number already exists in row, column, or subgrid');
+        setScore(prev => Math.max(0, prev - 50));
+
+        // Add to move history with negative score
+        setMoves(prev => [...prev, {
+          row,
+          col,
+          value: number,
+          timestamp: new Date().toISOString(),
+          scoreChange: -50,
+          isInvalid: true
+        }]);
+        setValidating(false);
+        return;
+      }
+
+      // Safety check for consistency object
+      if (!consistency || !consistency.isConsistent) {
+        setError(`🚫 Board Cannot Be Solved! ${consistency ? consistency.message : 'This move creates a contradiction that makes the puzzle unsolvable. Please undo or reset.'}`);
+        setScore(prev => Math.max(0, prev - 100));
+        setValidating(false);
+
+        // Add to move history with negative score
+        setMoves(prev => [...prev, {
+          row,
+          col,
+          value: number,
+          timestamp: new Date().toISOString(),
+          scoreChange: -100,
+          isInvalid: true
+        }]);
+        return;
+      }
+
+      // Move is valid and consistent
       setError('');
-      return;
-    }
+      setScore(prev => prev + 10);
 
-    // Don't allow modification of initial values in other modes
-    if (initialBoard[row][col] !== 0) {
-      setError('Cannot modify initial puzzle values');
-      return;
-    }
-
-    const newBoard = board.map(r => [...r]);
-    newBoard[row][col] = number;
-
-    // Always update the board, even if invalid
-    setBoard(newBoard);
-
-    setValidating(true);
-
-    // Always run advanced consistency check (with arc consistency analysis)
-    const consistency = await checkMoveConsistency(newBoard, row, col, number);
-
-    // Update arc consistency steps for this move (keep raw format for detailed visualization)
-    // Add a 'failed' flag to each step if consistency check failed
-    if (consistency.arcConsistencySteps && consistency.arcConsistencySteps.length > 0) {
-      const stepsWithStatus = consistency.arcConsistencySteps.map(step => ({
-        ...step,
-        isFailed: !consistency.isConsistent
-      }));
-      setMoveArcConsistencySteps(stepsWithStatus);
-    } else {
-      setMoveArcConsistencySteps([]);
-    }
-
-    // Update domains from consistency check
-    if (consistency.domains) {
-      setDomains(consistency.domains);
-    }
-
-    // Basic validation - show error but don't prevent the move
-    if (number !== 0 && !isValidMove(newBoard, row, col, number)) {
-      setError('❌ Invalid move! Number already exists in row, column, or subgrid');
-      setScore(prev => Math.max(0, prev - 50));
-
-      // Add to move history with negative score
+      // Add to move history
       setMoves(prev => [...prev, {
         row,
         col,
         value: number,
         timestamp: new Date().toISOString(),
-        scoreChange: -50,
-        isInvalid: true
+        scoreChange: number === 0 ? -5 : 10,
+        isInvalid: false
       }]);
+
+      // Check if puzzle is complete
+      if (isBoardComplete(newBoard)) {
+        setError('🎉 Congratulations! Puzzle solved correctly!');
+        setScore(prev => prev + 500); // Bonus for completion
+      }
+
       setValidating(false);
-      return;
-    }
-
-    if (!consistency.isConsistent) {
-      setError(`🚫 Board Cannot Be Solved! ${consistency.message || 'This move creates a contradiction that makes the puzzle unsolvable. Please undo or reset.'}`);
-      setScore(prev => Math.max(0, prev - 100));
+    } catch (err) {
+      console.error('Error in handleNumberInput:', err);
+      setError(`Error: ${err.message}`);
       setValidating(false);
-
-      // Add to move history with negative score
-      setMoves(prev => [...prev, {
-        row,
-        col,
-        value: number,
-        timestamp: new Date().toISOString(),
-        scoreChange: -100,
-        isInvalid: true
-      }]);
-      return;
     }
-
-    // Move is valid and consistent
-    setError('');
-    setScore(prev => prev + 10);
-
-    // Add to move history
-    setMoves(prev => [...prev, {
-      row,
-      col,
-      value: number,
-      timestamp: new Date().toISOString(),
-      scoreChange: number === 0 ? -5 : 10,
-      isInvalid: false
-    }]);
-
-    // Check if puzzle is complete
-    if (isBoardComplete(newBoard)) {
-      setError('🎉 Congratulations! Puzzle solved correctly!');
-      setScore(prev => prev + 500); // Bonus for completion
-    }
-
-    setValidating(false);
   }, [selectedCell, board, initialBoard, checkMoveConsistency, mode]);
 
   // New function to provide hints

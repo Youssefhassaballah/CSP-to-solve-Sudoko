@@ -112,14 +112,23 @@ class SudokuCSP:
                 str(xj): list(self.domains[xj])
             }
 
-            self.arc_consistency_steps.append({
+            # Create a step for this arc consistency reduction
+            step = {
                 'arc': (xi, xj),
                 'cell': xi,
                 'removed_values': list(values_to_remove),
                 'domain_before': domain_before,
                 'domain_after': list(self.domains[xi]),
-                'arc_domains': arc_domains  # Only the two cells in the arc
-            })
+                'arc_domains': arc_domains,  # Only the two cells in the arc
+                'is_cell_assignment': False  # Mark as arc consistency, not assignment
+            }
+            
+            # If this reduction brought domain down to exactly 1 value, mark it specially
+            if len(self.domains[xi]) == 1:
+                step['domain_reduced_to_one'] = True
+                step['reduced_to_value'] = list(self.domains[xi])[0]
+            
+            self.arc_consistency_steps.append(step)
 
         return revised
     
@@ -170,26 +179,15 @@ class SudokuCSP:
         return list(neighbors)
     
     def update_board_from_domains(self):
-        """Update board cells that have singleton domains and record the assignments"""
+        """Update board cells that have singleton domains (without recording assignment steps)"""
         updated = 0
         for (row, col), domain in self.domains.items():
             if len(domain) == 1 and self.board[row][col] == 0:
                 value = next(iter(domain))
                 self.board[row][col] = value
                 updated += 1
-
-                # Record this cell assignment as a special step for visualization
-                domain_snapshot = {str(k): list(v) for k, v in self.domains.items()}
-                self.arc_consistency_steps.append({
-                    'arc': ((row, col), (row, col)),  # Self-reference for cell assignment
-                    'cell': (row, col),
-                    'removed_values': [],
-                    'domain_before': [value],
-                    'domain_after': [value],
-                    'domains_snapshot': domain_snapshot,
-                    'is_cell_assignment': True,  # Flag to identify cell assignments
-                    'assigned_value': value
-                })
+                # Don't record assignment steps for domain==1 cases
+                # All relevant arc consistency steps have already been recorded
 
         return updated
     
